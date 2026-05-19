@@ -13,6 +13,8 @@ import asyncio
 import logging
 from typing import Any, Optional
 
+from opentelemetry import trace
+
 from src.config.settings import settings
 from src.models.diagnostic_models import (
     Confidence,
@@ -31,6 +33,7 @@ from src.modules.knowledge_graph import KnowledgeGraphClient
 from src.modules.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer(__name__)
 
 
 class DiagnosticWorkflow:
@@ -46,8 +49,12 @@ class DiagnosticWorkflow:
         self._pipeline_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_DIAGNOSTICS)
 
     async def run(self, request: DiagnosticRequest) -> tuple[DiagnosisSummary, dict[str, Any]]:
-        async with self._pipeline_semaphore:
-            return await self._run_unguarded(request)
+        with _tracer.start_as_current_span("workflow.run") as span:
+            span.set_attribute("case_id", request.case_id)
+            span.set_attribute("dtc_count", len(request.dtc_codes))
+            span.set_attribute("has_telemetry", bool(request.telemetry))
+            async with self._pipeline_semaphore:
+                return await self._run_unguarded(request)
 
     async def _run_unguarded(
         self, request: DiagnosticRequest
@@ -56,26 +63,31 @@ class DiagnosticWorkflow:
         stages: dict[str, Any] = {}
 
         # Stage 1: data gathering
-        kg_data = await self.kg.gather_for_dtcs(dtc_codes)
-        stages["data_gathering"] = kg_data.model_dump()
+        with _tracer.start_as_current_span("stage.data_gathering"):
+            kg_data = await self.kg.gather_for_dtcs(dtc_codes)
+            stages["data_gathering"] = kg_data.model_dump()
 
         # Stage 2: triage
-        triage = await self._run_triage(request, kg_data)
-        stages["triage"] = triage.model_dump()
+        with _tracer.start_as_current_span("stage.triage"):
+            triage = await self._run_triage(request, kg_data)
+            stages["triage"] = triage.model_dump()
 
         # Stage 3: telemetry (optional)
         telemetry: Optional[TelemetryOutput] = None
         if request.telemetry:
-            telemetry = await self._run_telemetry(request, kg_data)
-            stages["telemetry"] = telemetry.model_dump()
+            with _tracer.start_as_current_span("stage.telemetry"):
+                telemetry = await self._run_telemetry(request, kg_data)
+                stages["telemetry"] = telemetry.model_dump()
 
         # Stage 4: root cause
-        root_cause = await self._run_root_cause(triage, telemetry, kg_data)
-        stages["root_cause"] = root_cause.model_dump()
+        with _tracer.start_as_current_span("stage.root_cause"):
+            root_cause = await self._run_root_cause(triage, telemetry, kg_data)
+            stages["root_cause"] = root_cause.model_dump()
 
         # Stage 5: impact
-        impact = await self._run_impact(root_cause, kg_data)
-        stages["impact"] = impact.model_dump()
+        with _tracer.start_as_current_span("stage.impact"):
+            impact = await self._run_impact(root_cause, kg_data)
+            stages["impact"] = impact.model_dump()
 
         summary = self._assemble_summary(triage, root_cause, impact, kg_data)
         return summary, stages

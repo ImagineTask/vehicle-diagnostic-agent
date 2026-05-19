@@ -20,7 +20,14 @@ class Settings(BaseSettings):
     # --- Environment ---
     ENVIRONMENT: Literal["local", "dev", "staging", "prod"] = "local"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    # None = auto: text in local, json everywhere else.
+    LOG_FORMAT: Optional[Literal["text", "json"]] = None
     DEBUG: bool = False
+
+    # --- Observability ---
+    # Empty endpoint disables tracing (no-op TracerProvider).
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_SERVICE_NAME: str = "vehicle-diagnostic-agent"
 
     # --- Concurrency limits ---
     MAX_CONCURRENT_DIAGNOSTICS: int = 10

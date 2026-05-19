@@ -65,3 +65,15 @@ class HealthResponse(BaseModel):
     auth: str
     langfuse: str
     version: str
+
+
+class ReadinessCheck(BaseModel):
+    name: str
+    ok: bool
+    detail: Optional[str] = None
+
+
+class ReadinessResponse(BaseModel):
+    ready: bool
+    checks: list[ReadinessCheck]
+    version: str

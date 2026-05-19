@@ -13,19 +13,11 @@ from src.config.settings import settings
 from src.modules.agent_runner import AgentRunner
 from src.modules.knowledge_graph import KnowledgeGraphClient
 from src.modules.prompt_manager import PromptManager
+from src.observability.logging_config import configure_logging
+from src.observability.tracing import setup_tracing, shutdown_tracing
 from src.pipeline.workflow import DiagnosticWorkflow
 
 logger = logging.getLogger(__name__)
-
-
-def _configure_logging() -> None:
-    """Set log level idempotently. basicConfig() is a no-op if already configured,
-    so apply the level directly to the root logger."""
-    level = getattr(logging, settings.LOG_LEVEL, logging.INFO)
-    root = logging.getLogger()
-    if not root.handlers:
-        logging.basicConfig(level=level)
-    root.setLevel(level)
 
 
 def _init_langfuse() -> Optional[Any]:
@@ -48,7 +40,11 @@ def _init_langfuse() -> Optional[Any]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    _configure_logging()
+    configure_logging()
+    # Tracing must be set up before any spans are emitted; FastAPI instrumentation
+    # only catches requests received after this point, which is what we want.
+    tracer_provider = setup_tracing(app)
+    app.state.tracer_provider = tracer_provider
     logger.info("Starting vehicle diagnostic agent (env=%s)", settings.ENVIRONMENT)
 
     # --- Neo4j ---
@@ -94,3 +90,4 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 langfuse.flush()
             except Exception:  # pragma: no cover
                 logger.exception("Langfuse flush failed")
+        shutdown_tracing(tracer_provider)

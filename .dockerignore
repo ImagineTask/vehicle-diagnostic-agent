@@ -1,0 +1,28 @@
+# VCS + IDE
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+.claude/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets — must be injected at runtime, never baked into images.
+env/credentials.env
+env/config.env
+.env
+*.log
+
+# Tests + docs are not needed in runtime image.
+tests/
+README.md
+.DS_Store
