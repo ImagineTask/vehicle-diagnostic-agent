@@ -16,6 +16,20 @@ from src.routers import diagnostic_router
 logger = logging.getLogger(__name__)
 
 
+def _resolve_cors_origins() -> list[str]:
+    """Local dev gets a wildcard; every other env must opt-in via env var."""
+    configured = settings.CORS_ALLOW_ORIGINS
+    if configured:
+        return configured
+    if settings.ENVIRONMENT == "local":
+        return ["*"]
+    logger.warning(
+        "CORS_ALLOW_ORIGINS is empty in env=%s — cross-origin requests will be blocked",
+        settings.ENVIRONMENT,
+    )
+    return []
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Vehicle Diagnostic Agent",
@@ -24,11 +38,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # NOTE: CORS is wide open by design in dev — tighten for production deployments.
+    origins = _resolve_cors_origins()
+    # Wildcard + credentials is invalid per the CORS spec; force-disable
+    # credentials when "*" is in use so we never ship the unsafe combo.
+    allow_credentials = settings.CORS_ALLOW_CREDENTIALS and "*" not in origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ALLOW_ORIGINS,
-        allow_credentials=True,
+        allow_origins=origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )

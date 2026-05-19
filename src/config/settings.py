@@ -72,7 +72,10 @@ class Settings(BaseSettings):
     # --- API ---
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    CORS_ALLOW_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
+    # Empty default in non-local environments forces an explicit allowlist;
+    # local dev gets a wildcard via the resolver in api.py.
+    CORS_ALLOW_ORIGINS: list[str] = Field(default_factory=list)
+    CORS_ALLOW_CREDENTIALS: bool = False
 
 
 @lru_cache(maxsize=1)

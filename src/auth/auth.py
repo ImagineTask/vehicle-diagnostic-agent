@@ -71,10 +71,30 @@ class KeycloakJWTValidator(TokenValidator):
             )
         try:
             import jwt  # type: ignore
+            from jwt import (  # type: ignore
+                InvalidTokenError,
+                PyJWKClientError,
+            )
+        except ImportError as e:
+            logger.error("PyJWT not installed; cannot validate JWTs")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Auth subsystem misconfigured",
+            ) from e
 
+        try:
             signing_key = self._client().get_signing_key_from_jwt(token).key
+        except PyJWKClientError as e:
+            # JWKS fetch/network failure — operational issue, not a bad token.
+            logger.error("JWKS retrieval failed: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Auth provider unavailable",
+            ) from e
+
+        try:
             options = {"verify_aud": bool(self._audience)}
-            claims = jwt.decode(
+            return jwt.decode(
                 token,
                 signing_key,
                 algorithms=["RS256"],
@@ -82,8 +102,7 @@ class KeycloakJWTValidator(TokenValidator):
                 issuer=self._issuer,
                 options=options,
             )
-            return claims
-        except Exception as e:
+        except InvalidTokenError as e:
             logger.warning("JWT validation failed: %s", e)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"

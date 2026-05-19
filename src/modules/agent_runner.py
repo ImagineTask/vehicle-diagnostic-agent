@@ -148,7 +148,16 @@ class AgentRunner:
                     {"role": "user", "content": user_prompt},
                 ],
             )
+        except asyncio.TimeoutError as e:
+            raise AgentRunError(
+                f"Azure OpenAI timed out after {settings.LLM_REQUEST_TIMEOUT_SECONDS}s"
+            ) from e
+        except (ConnectionError, TimeoutError) as e:
+            raise AgentRunError(f"Azure OpenAI network failure: {e}") from e
         except Exception as e:
+            # OpenAI SDK raises typed errors (APIError subclasses), but we
+            # don't import them here to keep this module decoupled from a
+            # specific SDK version. Surface as AgentRunError for retry/backoff.
             raise AgentRunError(f"Azure OpenAI call failed: {e}") from e
 
         content = completion.choices[0].message.content or ""
@@ -191,16 +200,26 @@ class AgentRunner:
         )
         full_prompt = f"{agent.system_prompt}\n\n{user_prompt}{schema_hint}"
 
+        if settings.GEMINI_USE_VERTEX:
+            model = client(agent.model)  # vertex: GenerativeModel(model_name)
+        else:
+            model = client.GenerativeModel(agent.model)
+
         try:
-            if settings.GEMINI_USE_VERTEX:
-                model = client(agent.model)  # vertex: GenerativeModel(model_name)
-                response = await asyncio.to_thread(model.generate_content, full_prompt)
-                text = response.text
-            else:
-                model = client.GenerativeModel(agent.model)
-                response = await asyncio.to_thread(model.generate_content, full_prompt)
-                text = response.text
+            response = await asyncio.wait_for(
+                asyncio.to_thread(model.generate_content, full_prompt),
+                timeout=settings.LLM_REQUEST_TIMEOUT_SECONDS,
+            )
+            text = response.text
+        except asyncio.TimeoutError as e:
+            raise AgentRunError(
+                f"Gemini call timed out after {settings.LLM_REQUEST_TIMEOUT_SECONDS}s"
+            ) from e
+        except (ConnectionError, TimeoutError) as e:
+            raise AgentRunError(f"Gemini network failure: {e}") from e
         except Exception as e:
+            # SDK-specific errors (auth, quota, malformed response) — surface
+            # as AgentRunError so tenacity can decide on retry.
             raise AgentRunError(f"Gemini call failed: {e}") from e
 
         return strip_json_fences(text or "")

@@ -13,8 +13,19 @@ from src.config.settings import settings
 from src.modules.agent_runner import AgentRunner
 from src.modules.knowledge_graph import KnowledgeGraphClient
 from src.modules.prompt_manager import PromptManager
+from src.pipeline.workflow import DiagnosticWorkflow
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    """Set log level idempotently. basicConfig() is a no-op if already configured,
+    so apply the level directly to the root logger."""
+    level = getattr(logging, settings.LOG_LEVEL, logging.INFO)
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(level=level)
+    root.setLevel(level)
 
 
 def _init_langfuse() -> Optional[Any]:
@@ -37,7 +48,7 @@ def _init_langfuse() -> Optional[Any]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    logging.basicConfig(level=settings.LOG_LEVEL)
+    _configure_logging()
     logger.info("Starting vehicle diagnostic agent (env=%s)", settings.ENVIRONMENT)
 
     # --- Neo4j ---
@@ -45,6 +56,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await kg.connect()
     app.state.kg = kg
     app.state.kg_healthy = await kg.verify_connectivity()
+    if not app.state.kg_healthy and settings.ENVIRONMENT in {"staging", "prod"}:
+        # Fail startup loudly rather than serving traffic with a dead KG.
+        await kg.close()
+        raise RuntimeError(
+            f"Neo4j connectivity check failed in env={settings.ENVIRONMENT}; refusing to start"
+        )
 
     # --- Langfuse ---
     langfuse = _init_langfuse()
@@ -57,7 +74,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.prompts = prompts
 
     # --- Agent runner ---
-    app.state.runner = AgentRunner()
+    runner = AgentRunner()
+    app.state.runner = runner
+
+    # --- Workflow (single instance — owns the pipeline-wide semaphore) ---
+    app.state.workflow = DiagnosticWorkflow(kg=kg, prompts=prompts, runner=runner)
 
     # --- Auth ---
     app.state.token_validator = build_token_validator()

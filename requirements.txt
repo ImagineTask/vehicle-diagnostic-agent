@@ -1,20 +1,21 @@
+# Pinned for reproducible builds. Bump deliberately and re-test.
 # --- Core (required) ---
-fastapi>=0.115
-uvicorn[standard]>=0.30
-pydantic>=2.7
-pydantic-settings>=2.4
-openai>=1.40
-neo4j>=5.20
-tenacity>=8.3
-pyyaml>=6.0
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.7.0
+openai==1.57.4
+neo4j==5.27.0
+tenacity==9.0.0
+pyyaml==6.0.2
 
 # --- Optional ---
-langfuse>=2.40         # observability
-google-generativeai>=0.7   # Gemini AI Studio
-google-cloud-aiplatform>=1.60  # Vertex AI (alt path for Gemini)
-PyJWT[crypto]>=2.8     # Keycloak auth
+langfuse==2.57.0         # observability
+google-generativeai==0.8.3   # Gemini AI Studio
+google-cloud-aiplatform==1.74.0  # Vertex AI (alt path for Gemini)
+PyJWT[crypto]==2.10.1     # Keycloak auth
 
 # --- Dev / test ---
-pytest>=8.0
-pytest-asyncio>=0.23
-httpx>=0.27
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1

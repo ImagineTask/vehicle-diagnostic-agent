@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
+from src.config.settings import settings
+
 
 class LLMProvider(str, Enum):
     AZURE_OPENAI = "azure_openai"
@@ -156,12 +158,15 @@ AgentConfig(
 )
 
 # --- Test agent (echo) ---
+# Only registered outside of prod to avoid exposing an echo endpoint in
+# production. test_smoke covers the gated registration.
 
-AgentConfig(
-    name="test_echo_agent",
-    provider=LLMProvider.AZURE_OPENAI,
-    model="gpt-4o",
-    system_prompt="Echo the user's input back as JSON: {\"echo\": <input>}.",
-    temperature=0.0,
-    tags=["test"],
-)
+if settings.ENVIRONMENT != "prod":
+    AgentConfig(
+        name="test_echo_agent",
+        provider=LLMProvider.AZURE_OPENAI,
+        model="gpt-4o",
+        system_prompt="Echo the user's input back as JSON: {\"echo\": <input>}.",
+        temperature=0.0,
+        tags=["test"],
+    )

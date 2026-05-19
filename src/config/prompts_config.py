@@ -7,6 +7,7 @@ from typing import Optional, Type
 
 from pydantic import BaseModel
 
+from src.config.settings import settings
 from src.models.diagnostic_models import (
     DataGatheringOutput,
     TriageOutput,
@@ -160,11 +161,13 @@ PromptConfig(
 
 
 # --- 7. Test echo prompt ---
+# Gated alongside the test_echo_agent in agents_config.py.
 
-PromptConfig(
-    name="test_echo_prompt",
-    agent_name="test_echo_agent",
-    template="Echo this input as JSON: {{input}}",
-    output_schema=EchoOutput,
-    variables=["input"],
-)
+if settings.ENVIRONMENT != "prod":
+    PromptConfig(
+        name="test_echo_prompt",
+        agent_name="test_echo_agent",
+        template="Echo this input as JSON: {{input}}",
+        output_schema=EchoOutput,
+        variables=["input"],
+    )

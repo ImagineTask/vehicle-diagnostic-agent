@@ -17,8 +17,8 @@ class ResponseFormat(str, Enum):
 
 
 class DTCCode(BaseModel):
-    code: str
-    description: Optional[str] = None
+    code: str = Field(min_length=1, max_length=16)
+    description: Optional[str] = Field(default=None, max_length=512)
     timestamp: Optional[datetime] = None
 
     @field_validator("code")
@@ -28,25 +28,27 @@ class DTCCode(BaseModel):
 
 
 class VehicleInfo(BaseModel):
-    make: str
-    model: str
-    year: int
-    vin: Optional[str] = None
-    mileage_km: Optional[int] = None
+    make: str = Field(min_length=1, max_length=64)
+    model: str = Field(min_length=1, max_length=64)
+    # Earliest mass-produced vehicles ~1900; cap above current year to allow pre-orders.
+    year: int = Field(ge=1900, le=2100)
+    vin: Optional[str] = Field(default=None, min_length=11, max_length=17)
+    mileage_km: Optional[int] = Field(default=None, ge=0, le=10_000_000)
 
 
 class SensorReading(BaseModel):
-    sensor: str
-    unit: Optional[str] = None
-    samples: list[tuple[datetime, float]] = Field(default_factory=list)
+    sensor: str = Field(min_length=1, max_length=128)
+    unit: Optional[str] = Field(default=None, max_length=32)
+    # Capping samples bounds prompt size and protects the summariser.
+    samples: list[tuple[datetime, float]] = Field(default_factory=list, max_length=10_000)
 
 
 class DiagnosticRequest(BaseModel):
-    case_id: str
+    case_id: str = Field(min_length=1, max_length=256)
     vehicle: VehicleInfo
-    dtc_codes: list[DTCCode]
-    telemetry: list[SensorReading] = Field(default_factory=list)
-    driver_notes: Optional[str] = None
+    dtc_codes: list[DTCCode] = Field(min_length=1, max_length=64)
+    telemetry: list[SensorReading] = Field(default_factory=list, max_length=64)
+    driver_notes: Optional[str] = Field(default=None, max_length=4096)
     response_format: ResponseFormat = ResponseFormat.JSON
 
 

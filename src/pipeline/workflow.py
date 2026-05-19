@@ -183,7 +183,16 @@ def _summarise_telemetry(readings: list) -> str:
         return "(none)"
     parts: list[str] = []
     for r in readings:
-        samples = r.samples[:5]
-        rendered = ", ".join(f"{ts.isoformat()}={v}" for ts, v in samples)
+        samples = getattr(r, "samples", None) or []
+        rendered_samples: list[str] = []
+        for sample in samples[:5]:
+            # Tolerate either tuples or sequences from upstream parsers; skip
+            # any malformed entries rather than letting them blow up the request.
+            if not isinstance(sample, (tuple, list)) or len(sample) != 2:
+                continue
+            ts, v = sample
+            ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+            rendered_samples.append(f"{ts_str}={v}")
+        rendered = ", ".join(rendered_samples) if rendered_samples else "(no samples)"
         parts.append(f"{r.sensor} ({r.unit or '?'}): {rendered}")
     return "\n".join(parts)
