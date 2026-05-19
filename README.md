@@ -2,7 +2,6 @@
 
 FMEA-grounded vehicle diagnostic pipeline. FastAPI service that takes DTC codes + optional telemetry, queries a Neo4j FMEA knowledge graph, runs a 5-stage LLM pipeline (data gathering → triage → telemetry → root cause → impact), and returns a driver-facing diagnosis summary.
 
-> **Note**: This scaffold was rebuilt from an architecture handover deck after the original codebase was lost. The structure, file layout, agents, prompts, and KG schema follow the documented architecture, but specific prompt wording and Cypher queries may need tuning against your real KG.
 
 ## Architecture
 
